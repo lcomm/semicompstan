@@ -1,0 +1,44 @@
+---
+title: "A basic semicompeting risks model in Stan"
+author: "Leah Comment"
+date: "10/25/2017"
+output:
+  pdf_document: default
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{positioning}
+  - \usetikzlibrary{arrows}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Model formulation
+
+## Weibull models
+
+The hazard of a Weibull model with shape $\alpha$ and scale $\kappa$ is
+\[ h(t|x_i) = \alpha \kappa t^{\alpha-1} \exp\left\lbrace x_i'\beta \right\rbrace\]
+This is the parameterization used in Lee et al.
+
+Alternatively, one can use the Stan hazard parameterization, where
+\[ h(t) = \frac{\alpha}{\sigma} \left( \frac{t}{\sigma} \right)^{\alpha - 1}\]
+
+The relationship between the two is that 
+\[ \sigma^{-\alpha} = \exp\left\lbrace x_i'\beta \right\rbrace\]
+
+# Likelihood contributions by observed data pattern
+
+## Observed
+
+The Stan code to fit these models is shown below.
+```{r, code = readLines("semicompeting_weibull.stan"), eval = FALSE}
+```
+
+```{r, cache = TRUE}
+# Fit Weibull semicompeting model
+fit1 <- stan(file = "semicompeting_weibull.stan", data = dat_ID, iter = 500, chains = 1)
+```
+
