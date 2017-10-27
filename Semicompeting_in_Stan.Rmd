@@ -19,19 +19,58 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Weibull models
 
-The hazard of a Weibull model with shape $\alpha$ and scale $\kappa$ is
-\[ h(t|x_i) = \alpha \kappa t^{\alpha-1} \exp\left\lbrace x_i'\beta \right\rbrace\]
-This is the parameterization used in Lee et al.
+The hazard of a Weibull regression model with shape $\alpha$ is
+\[ h(t|x_i) = \alpha t^{\alpha-1} \exp\left\lbrace x_i'\beta \right\rbrace\]
+With $\kappa = \exp(\beta_0)$, this is the parameterization used in Lee et al.
 
 Alternatively, one can use the Stan hazard parameterization, where
 \[ h(t) = \frac{\alpha}{\sigma} \left( \frac{t}{\sigma} \right)^{\alpha - 1}\]
 
-The relationship between the two is that 
-\[ \sigma^{-\alpha} = \exp\left\lbrace x_i'\beta \right\rbrace\]
+To incorporate regression parameters into the model, we note that
+\[ \sigma^{-\alpha} = \exp\left\lbrace x_i'\beta \right\rbrace \]
+and thus
+\[ \sigma = \exp\left\lbrace -\frac{x_i'\beta}{\alpha} \right\rbrace\]
 
 # Likelihood contributions by observed data pattern
 
+
+TODO(LCOMM): Type out likelihood
+
+
 ## Observed
+
+
+TODO(LCOMM): Observed data pattern table
+
+TODO(LCOMM): Likelihood contributions by data pattern
+
+
+```{r}
+# Packages
+suppressPackageStartupMessages(library("rstan"))
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores() - 1)
+```
+
+```{r}
+# Read in semicompeting risk Weibull simulated data
+dat_ID <- readRDS("dat_ID.Rdata")
+
+# Package for Stan
+x_m <- cbind(1, dat_ID$x_c)
+stan_dat <-  list(N = nrow(dat_ID),
+                  P_1 = ncol(x_m),
+                  X_1 = x_m,
+                  P_2 = ncol(x_m),
+                  X_2 = x_m,
+                  P_3 = ncol(x_m),
+                  X_3 = x_m,
+                  Yr = dat_ID$R,
+                  dYr = dat_ID$delta_R,
+                  Yt = dat_ID$T,
+                  dYt = dat_ID$delta_T)
+
+```
 
 The Stan code to fit these models is shown below.
 ```{r, code = readLines("semicompeting_weibull.stan"), eval = FALSE}
@@ -39,6 +78,102 @@ The Stan code to fit these models is shown below.
 
 ```{r, cache = TRUE}
 # Fit Weibull semicompeting model
-fit1 <- stan(file = "semicompeting_weibull.stan", data = dat_ID, iter = 500, chains = 1)
+library("rstan")
+fit1 <- stan(file = "semicompeting_weibull.stan", data = stan_dat, 
+             iter = 1000, chains = 4)
+summary(fit1)[["summary"]]
+plot(fit1)
 ```
+
+TODO(LCOMM): Look into reparameterization to reduce numerical issues
+
+```{r}
+# Compare to Lee et al
+library("SemiCompRisks")
+
+# Objects
+Y = data.frame(dat_ID$R, dat_ID$delta_R, 
+               dat_ID$T, dat_ID$delta_T)
+lin.pred = list(formula(~ x_c),
+                formula(~ x_c),
+                formula(~ x_c))
+
+### Hyperparameters
+## Subject-specific frailty variance component
+##  - prior parameters for 1/theta
+theta.ab <- c(0.7, 0.7)
+
+## Weibull baseline hazard function: alphas, kappas
+WB.ab1 <- c(0.5, 0.01) # prior parameters for alpha1
+WB.ab2 <- c(0.5, 0.01) # prior parameters for alpha2
+WB.ab3 <- c(0.5, 0.01) # prior parameters for alpha3
+##
+WB.cd1 <- c(0.5, 0.05) # prior parameters for kappa1
+WB.cd2 <- c(0.5, 0.05) # prior parameters for kappa2
+WB.cd3 <- c(0.5, 0.05) # prior parameters for kappa3
+
+hyperParams <- list(theta = theta.ab,
+                    WB = list(WB.ab1 = WB.ab1, WB.ab2 = WB.ab2, WB.ab3 = WB.ab3,
+                              WB.cd1 = WB.cd1, WB.cd2 = WB.cd2, WB.cd3 = WB.cd3))
+
+###################
+## MCMC SETTINGS ##
+###################
+
+## Setting for the overall run
+numReps    <- 5000
+thin       <- 10
+burninPerc <- 0.6
+
+## Settings for storage
+nGam_save <- 0
+storeV    <- rep(TRUE, 3)
+
+## Tuning parameters for specific updates
+mhProp_theta_var  <- 0.05
+mhProp_Vg_var     <- c(0.05, 0.05, 0.05)
+
+## Specific to the Weibull specification of the baseline hazard functions
+mhProp_alphag_var <- c(0.01, 0.01, 0.01)
+mcmc.WB  <- list(run = list(numReps = numReps, thin = thin, burninPerc = burninPerc),
+                 storage = list(nGam_save = nGam_save, storeV=storeV),
+                 tuning = list(mhProp_theta_var = mhProp_theta_var,
+                               mhProp_Vg_var = mhProp_Vg_var, 
+                               mhProp_alphag_var = mhProp_alphag_var))
+myModel <- c("semi-Markov", "Weibull")
+startValues      <- vector("list", 2)
+startValues[[1]] <- initiate.startValues_HReg(Y, lin.pred, dat_ID, model = myModel)
+startValues[[2]] <- initiate.startValues_HReg(Y, lin.pred, dat_ID, model = myModel,
+                                              theta = 0.23)
+startValues[[3]] <- initiate.startValues_HReg(Y, lin.pred, dat_ID, model = myModel,
+                                              theta = 0.72)
+startValues[[4]] <- initiate.startValues_HReg(Y, lin.pred, dat_ID, model = myModel,
+                                              theta = 0.55)
+
+# Fit SemiCompRisks models
+fit2 <- BayesID_HReg(Y, lin.pred, data = dat_ID,
+                     hyperParams = hyperParams, startValues = startValues,
+                     mcmc = mcmc.WB, path = "SemiCompRisks/Output/")
+print(fit2)
+str(summary(fit2))
+theta_est <- summary(fit2)[["theta"]][,1]
+kappa_ests <- exp(summary(fit2)[["h0"]][1, c(1,4,7)])
+beta0_ests <- summary(fit2)[["h0"]][1, c(1,4,7)]
+alpha_ests <- exp(summary(fit2)[["h0"]][2, c(1,4,7)])
+beta_ests <- log(summary(fit2)[["coef"]][c(1,4,7)])
+
+# print(fit2)
+# str(summary(fit2)$psrf)
+# plot(fit2)
+# str(fit2)
+# 
+# # Extract comparable to Stan output
+# beta01 <- log(summary(fit2)[["psrf"]][["h0"]]["kappa","h1"])
+# beta02 <- log(summary(fit2)[["psrf"]][["h0"]]["kappa","h2"])
+# beta03 <- log(summary(fit2)[["psrf"]][["h0"]]["kappa","h3"])
+# beta_x <- summary(fit2)[["psrf"]][["coef"]]
+
+```
+
+TODO(LCOMM): Finish comparison table
 

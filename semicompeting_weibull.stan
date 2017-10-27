@@ -14,11 +14,11 @@ data {
   // design matrix for terminal model with non-terminal history
   matrix[N, P_3] X_3;
   // observed non-terminal time
-  real<lower=0> Yr[N];
+  vector<lower=0>[N] Yr;
   // indicator of event observation for non-terminal event
   int<lower=0,upper=1> dYr[N];
   // observed terminal time
-  real<lower=0> Yt[N]; 
+  vector<lower=0>[N] Yt;
   // indicator of event observation for terminal event
   int<lower=0,upper=1> dYt[N];
 }
@@ -42,30 +42,53 @@ parameters {
   real<lower=0> alpha3;
   
   // scale parameters
-  // bigger sigma -> slower event occurrence
-  real<lower=0> sigma1;
-  real<lower=0> sigma2;
-  real<lower=0> sigma3;
+  // bigger sigma -> slower event occurrence (double check this)
+  //real<lower=0> sigma1;
+  //real<lower=0> sigma2;
+  //real<lower=0> sigma3;
 }
 
 model {
+  // linear predictors
+  vector[N] lp1;
+  vector[N] lp2;
+  vector[N] lp3;
+  lp1 = X_1 * beta1;
+  lp2 = X_2 * beta2;
+  lp3 = X_3 * beta3;
+  
   // no priors -> use Stan defaults
   
   // likelihood
   for (n in 1:N){
     if (dYr[n] == 0 && dYt[n] == 0) {
+      
       // type 1: observe neither event
-      TODO(LCOMM): increment log-likelihood appropriately
+      target += weibull_lccdf(Yr[n] | alpha1, exp(-(lp1[n])/alpha1)) + 
+                weibull_lccdf(Yt[n] | alpha2, exp(-(lp2[n])/alpha2));
+                
     } else if (dYr[n] == 1 && dYt[n] == 0) {
+      
       // type 2: observe non-terminal but terminal censored
-      TODO(LCOMM): increment log-likelihood appropriately
+      target += weibull_lpdf(Yr[n] | alpha1, exp(-(lp1[n])/alpha1)) +
+                weibull_lccdf(Yr[n] | alpha2, exp(-(lp2[n])/alpha2)) + 
+                weibull_lccdf(YtYrdiff[n] | alpha3, exp(-(lp3[n])/alpha3));
+      
     } else if (dYr[n] == 0 && dYt[n] == 1) {
+      
       // type 3: observed terminal with no prior non-terminal
-      TODO(LCOMM): increment log-likelihood appropriately
-    } else if (dYr[n] == 1 && dYt[n] == 1){
+      target += weibull_lccdf(Yr[n] | alpha1, exp(-(lp1[n])/alpha1)) +
+                weibull_lpdf(Yt[n] | alpha2, exp(-(lp2[n])/alpha2));
+      
+    } else if (dYr[n] == 1 && dYt[n] == 1) {
+      
       // type 4: both non-terminal and terminal observed
-      TODO(LCOMM): increment log-likelihood appropriately
+      target += weibull_lpdf(Yr[n] | alpha1, exp(-(lp1[n])/alpha1)) +
+                weibull_lccdf(Yr[n] | alpha2, exp(-(lp2[n])/alpha2)) + 
+                weibull_lpdf(YtYrdiff[n] | alpha3, exp(-(lp3[n])/alpha3));
+
     }
   }
 }
+
 
