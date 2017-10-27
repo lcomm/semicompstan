@@ -1,0 +1,53 @@
+---
+title: "A simple Weibull model in Stan"
+author: "Leah Comment"
+date: "10/26/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Packages
+suppressPackageStartupMessages(library("rstan"))
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores() - 1)
+```
+
+```{r}
+# Read in Weibull simulated data
+dat_wei <- readRDS("dat_wei.Rdata")
+
+# Package for Stan
+stan_dat <-  list(N = nrow(dat_wei),
+                  P_1 = 2,
+                  X_1 = cbind(1, dat_wei$x_c),
+                  Y = dat_wei$Y,
+                  dY= dat_wei$delta_Y)
+
+```
+
+The Stan code to fit a simple Weibull regression model is shown below.
+```{r, code = readLines("simple_weibull.stan"), eval = FALSE}
+```
+
+```{r, cache = TRUE}
+# Fit Weibull model
+fit1 <- stan(file = "simple_weibull.stan", data = stan_dat, iter = 1000, chains = 4)
+b_ests <- summary(fit1, params = c("beta1"))[["summary"]][1:3,"50%"]
+plot(fit1)
+
+# Compare to frequentist
+library("survival")
+fit2 <- survreg(Surv(Y, delta_Y) ~ x_c, data = dat_wei, dist = "weibull")
+print(fit2)
+f_ests <- c(-coef(fit2)/fit2$scale, 1/fit2$scale)
+
+# Side-by side comparison of model results
+library("knitr")
+kable(data.frame(Parameter = c("beta1", "beta2", "alpha"), 
+                 Bayesian = b_ests, Frequentist = f_ests), 
+      row.names = FALSE)
+```
