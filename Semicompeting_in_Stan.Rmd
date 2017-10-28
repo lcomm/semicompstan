@@ -1,7 +1,7 @@
 ---
 title: "A basic semicompeting risks model in Stan"
 author: "Leah Comment"
-date: "10/25/2017"
+date: "10/25/2017 (updated 10/27/2017)"
 output:
   pdf_document: default
 header-includes:
@@ -119,30 +119,30 @@ f_{\bar{\mathbb{R}}} & = P(T = t, R = \bar{\mathbb{R}}) \\
 
 ## Likelihood contributions by data pattern
 
-For the semi-Markov model, the general form of the likelihood contributions is
+For the semi-Markov model, the general form of the likelihood contributions for each observed data pattern in the table above is
 
 \[ (\textcolor{rcolor}{\text{non-terminal contribution}}) \times 
 (\textcolor{tcolor}{\text{terminal contribution}}) \]
 
-TODO(LCOMM): add colors to contributions below
-
 Type 1 (observe neither event type):
-\[ L_{1i} = P(R > c_i, T > c_i) = S_1(c_i)S_2(c_i) = S_1(y^R_i) S_2(y^T_i) 
+\[ L_{1i} = P(R > c_i, T > c_i) = \textcolor{rcolor}{S_1(c_i)}
+\textcolor{tcolor}{S_2(c_i)} = \textcolor{rcolor}{S_1(y^R_i)} \textcolor{tcolor}{S_2(y^T_i)} 
 \]
 
 Type 2 (observe only non-terminal event):
 \[ L_{2i} = P(R = y^R_i, T > c_i) = \int_{c_i}^\infty f_u(y^R_i, u) du
-= f_1(y^R_i) S_2(y^R_i) S_3(c_i - y^R_i)
+= \textcolor{rcolor}{f_1(y^R_i)} \textcolor{tcolor}{S_2(y^R_i) S_3(c_i - y^R_i)}
 \]
 
 Type 3 (observe only terminal event):
 \[ L_{3i} = P(R > y^T_i, T = y^T_i) = \int_{y^T_i}^\infty f_u(u, y^R_i) du 
-= f_2(y^T_i) S_1(y^T_i) 
+= \textcolor{rcolor}{S_1(y^T_i)} \textcolor{tcolor}{f_2(y^T_i)}
 \]
 
 Type 4 (observe both event types):
 \[ L_{4i} = P(R = y^R_i, T = y^T_i) = f_u(y^R_i, y^T_i)
-= f_1(y^R_i) S_2(y^R_i) f_3(y^T_i - y^R_i) 
+= \textcolor{rcolor}{f_1(y^R_i)} 
+\textcolor{tcolor}{S_2(y^R_i) f_3(y^T_i - y^R_i)}
 \]
 
 TODO(LCOMM): fill in notation gaps above
