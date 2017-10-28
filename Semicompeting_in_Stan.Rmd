@@ -1,7 +1,7 @@
 ---
 title: "A basic semicompeting risks model in Stan"
 author: "Leah Comment"
-date: "10/25/2017 (updated 10/27/2017)"
+date: "10/25/2017 (updated 10/28/2017)"
 output:
   pdf_document: default
 header-includes:
@@ -44,27 +44,30 @@ The compartmental model representation of the issue of semicompeting risks conce
 \label{fig:compart}
 \end{figure}
 
+Making inferences in the illness-death context involves modeling the compartment transition hazards $\lambda_1$, $\lambda_2$, and v$\lambda_3$. These transitions hazards can change as a function of time, yielding $\lambda_1(t)$, $\lambda_2(t)$, and $\lambda_3(t)$.
+
 ## Notation
 
-Suppose we have a non-terminal event $R$ and a terminal event $T$. Both are subject to a censoring time which may vary by person. Let $T_i$ denote the terminal event time for person $i$. When the non-terminal event occurs, $R_i \in \mathbb{R}_+$; when the non-terminal event is truncated by death, $R_i \equiv \bar{\mathbb{R}}$, a non-real number. The potential censoring time is $C_i$. The observed non-terminal event time is $Y^R_i = \min(R_i, T_i, C_i)$, with $\min(x, \bar{\mathbb{R}}) \equiv x$ for any $x \in \mathbb{R}$. The non-terminal event indicator $\delta^R_i$ is $\mathbf{1}(Y^R_i = R_i)$. Similarly, $Y^T_i = \min(T_i, C_i)$, and $\delta^R_i$ is $\mathbf{1}(Y^T_i = T_i)$.
+Suppose we have a non-terminal event $R$ and a terminal event $T$. The terminal event can be any absorbing state, but "terminal event" and "death" are used interchangeably here. Both event times are subject to a censoring time which may vary by person. Let $T_i$ denote the terminal event time for person $i$. When the non-terminal event occurs, $R_i \in \mathbb{R}_+$; when the non-terminal event is truncated by death, $R_i \equiv \bar{\mathbb{R}}$, a non-real number. The potential censoring time is $C_i$. The observed non-terminal event time is $Y^R_i = \min(R_i, T_i, C_i)$, with $\min(x, \bar{\mathbb{R}}) \equiv x$ for any $x \in \mathbb{R}$. The non-terminal event indicator $\delta^R_i$ is $\mathbf{1}(Y^R_i = R_i)$. Similarly, $Y^T_i = \min(T_i, C_i)$, and $\delta^R_i$ is $\mathbf{1}(Y^T_i = T_i)$.
 
 ## Potential observed data patterns
 
-Four distinct data patterns are possible:
+Defined by $V_i = (\delta^R_i, \delta^T_i)$, four distinct data patterns are possible:
 
-| Type | Description                                            | $(Y^R_i, Y^T_i)$ | $(\delta^R_i, \delta^T_i)$ |
-|:----:|--------------------------------------------------------|:----------------:|:--------------------------:|
+| Type | Description                                            | $(Y^R_i, Y^T_i)$ | $V_i = (\delta^R_i, \delta^T_i)$ |
+|:----:|--------------------------------------------------------|:------------------------:|:--------------------------:|
 | 1    | Observe neither non-terminal nor terminal event        | $(c_i, c_i)$     | $(0,0)$                    |
-| 2    | Observe non-terminal event; terminal event is censored | $(y^R_i, c_i)$   | $(1,0)$                    |
-| 3    | Observe terminal event without non-terminal event      | $(y^T_i, y^T_i)$ | $(0,1)$                    |
-| 4    | Observe non-terminal and terminal events               | $(y^R_i, y^T_i)$ | $(1,1)$                    |
+| 2    | Observe non-terminal event; terminal event is censored | $(r_i, c_i) = (y^R_i, c_i)$   | $(1,0)$                    |
+| 3    | Observe terminal event without non-terminal event      | $(t_i, c_i) = (y^T_i, y^T_i)$ | $(0,1)$                    |
+| 4    | Observe non-terminal and terminal events               | $(r_i, t_i) = (y^R_i, y^T_i)$ | $(1,1)$                    |
 
 
-# Likelihood contributions by observed data pattern
+## Defining the joint distribution of non-terminal and terminal event times
 
-The joint density for $T$ and $R$ is shown in \ref{fig:jointdens}. The portion where both event types are observed is only defined on the "upper wedge" where $T>R$; the joint density is $f_u(r,t)$. When the non-terminal event does not occur ($R = \bar{\mathrm{R}}$), the density of $T$ is give $f_{\bar{\mathrm{R}}}(t)$.
+The joint density for $T$ and $R$ is shown in Figure \ref{fig:jointdens}. The portion where both event types are observed is only defined on the "upper wedge" where $T>R$; the joint density is $f_u(r,t)$. When the non-terminal event does not occur ($R = \bar{\mathrm{R}}$), the density of $T$ is give $f_{\bar{\mathrm{R}}}(t)$.
 
-\begin{figure}
+\begin{figure}[h]
+\label{fig:jointdens}
 \begin{center}
 \begin{tikzpicture}
 \pgfplotsset{ticks=none}
@@ -91,10 +94,10 @@ x label style = {at = {(axis description cs:0,-0.05)}, anchor = north}]
 \end{axis}
 \end{tikzpicture}
 \end{center}
-\label{fig:jointdens}
 \end{figure}
 
 For now, we assume a semi-Markov model for $\lambda_3$ where the hazard of the terminal event only depends on covariates and time elapsed since the non-terminal event. Ignoring measure theoretic issues and using $P(X=x)$ to refer to the pdf $f(x)$ for any continuous random variable,
+
 \begin{align*} 
 f_u(r,t) & = P(R = r, T = t) \text{ for } t > r \\
 & = P(R = r, T > r) P (T = t | R = r, T > r) \\
@@ -125,13 +128,15 @@ For the semi-Markov model, the general form of the likelihood contributions for 
 (\textcolor{tcolor}{\text{terminal contribution}}) \]
 
 Type 1 (observe neither event type):
-\[ L_{1i} = P(R > c_i, T > c_i) = \textcolor{rcolor}{S_1(c_i)}
-\textcolor{tcolor}{S_2(c_i)} = \textcolor{rcolor}{S_1(y^R_i)} \textcolor{tcolor}{S_2(y^T_i)} 
+\[ L_{1i} = P(R > c_i, T > c_i) 
+= \textcolor{rcolor}{S_1(c_i)} \textcolor{tcolor}{S_2(c_i)} 
+= \textcolor{rcolor}{S_1(y^R_i)} \textcolor{tcolor}{S_2(y^T_i)} 
 \]
 
 Type 2 (observe only non-terminal event):
 \[ L_{2i} = P(R = y^R_i, T > c_i) = \int_{c_i}^\infty f_u(y^R_i, u) du
 = \textcolor{rcolor}{f_1(y^R_i)} \textcolor{tcolor}{S_2(y^R_i) S_3(c_i - y^R_i)}
+= \textcolor{rcolor}{f_1(y^R_i)} \textcolor{tcolor}{S_2(y^R_i) S_3(y^T_i - y^R_i)}
 \]
 
 Type 3 (observe only terminal event):
@@ -144,6 +149,31 @@ Type 4 (observe both event types):
 = \textcolor{rcolor}{f_1(y^R_i)} 
 \textcolor{tcolor}{S_2(y^R_i) f_3(y^T_i - y^R_i)}
 \]
+
+## Full likelihood
+
+The combined likelihood of the observed data for $n$ observations is
+\begin{align*}
+\mathcal{L}_n = &
+%1
+\left[ \prod_{i : (\delta^R_i, \delta^T_i)=(0,0)}  
+\textcolor{rcolor}{S_1(y^R_i)} \textcolor{tcolor}{S_2(y^T_i)} 
+\right]
+%2
+\left[ \prod_{i : (\delta^R_i, \delta^T_i)=(1,0)} 
+\textcolor{rcolor}{f_1(y^R_i)} \textcolor{tcolor}{S_2(y^R_i) S_3(y^T_i - y^R_i)}
+\right] \times \\
+& 
+%3
+\left[ \prod_{i : (\delta^R_i, \delta^T_i)=(0,1)} 
+\textcolor{rcolor}{S_1(y^T_i)} \textcolor{tcolor}{f_2(y^T_i)}
+\right]
+%4
+\left[ \prod_{i : (\delta^R_i, \delta^T_i)=(1,1)} 
+\textcolor{rcolor}{f_1(y^R_i)} 
+\textcolor{tcolor}{S_2(y^R_i) f_3(y^T_i - y^R_i)} 
+\right]
+\end{align*}
 
 TODO(LCOMM): fill in notation gaps above
 
@@ -166,8 +196,32 @@ and thus
 
 # Fitting semicompeting risk Weibull hazard models in Stan
 
+Suppose we use Weibull hazards for the illness-death model below, which includes only a single covariate (`x_c` in the `dat_ID` data set):
+
+Non-terminal event hazard at time $r$:
+\[ h_{1}(r | X_i) 
+= \alpha_1 \kappa_1 r^{\alpha_1 - 1} \mathrm{exp} \left\lbrace \beta_1 X_i \right\rbrace
+= \alpha_1 r^{\alpha_1 - 1} \mathrm{exp} \left\lbrace \beta_0 + \beta_1 X_i \right\rbrace 
+\text{ for } r > 0 \]
+
+Terminal event hazard at time $t$, without having experienced the non-terminal event:
+\[ h_{2}(t | X_i) 
+= \alpha_2 \kappa_2 t^{\alpha_2 - 1} \mathrm{exp} \left\lbrace \beta_2 X_i \right\rbrace
+= \alpha_2 t^{\alpha_2 - 1} \mathrm{exp} \left\lbrace \beta_{02} + \beta_2 X_i \right\rbrace 
+\text{ for } t > 0 \]
+
+Terminal event hazard at time $t$, after having experienced the non-terminal event at $r$ in a Semi-Markov model:
+\[ h_{3}(t | X_i) 
+= \alpha_3 \kappa_3 (t-r)^{\alpha_3 - 1} \mathrm{exp} \left\lbrace \beta_3 X_i \right\rbrace 
+= \alpha_3 (t-r)^{\alpha_3 - 1} \mathrm{exp} \left\lbrace \beta_{03} + \beta_3 X_i \right\rbrace 
+\text{ for } t > r \]
+
+Let $\mathbf{x_i'\boldsymbol{\beta}}_g = \beta_{0g} + \beta_{g} X_i$ for $g \in (1,2,3)$. (This is the linear predictor that appears in the Stan code.)
+
+
 ```{r}
 # Packages
+library("knitr")
 suppressPackageStartupMessages(library("rstan"))
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores() - 1)
@@ -197,18 +251,20 @@ The Stan code to fit these models is shown below.
 ```{r, code = readLines("semicompeting_weibull.stan"), eval = FALSE}
 ```
 
-```{r, cache = TRUE}
+```{r, cache = TRUE, fig.height = 3, fig.width = 5, fig.align = "center"}
 # Fit Weibull semicompeting model
 library("rstan")
+# Discards first half of chains -> will yield 2000 posterior samples total
 fit1 <- stan(file = "semicompeting_weibull.stan", data = stan_dat, 
              iter = 1000, chains = 4)
-summary(fit1)[["summary"]]
+s_elapsed <- sum(get_elapsed_time(fit1))
 plot(fit1)
+print(fit1)
 ```
 
 TODO(LCOMM): Look into reparameterization to reduce numerical issues
 
-```{r}
+```{r, include = FALSE}
 # Compare to Lee et al
 library("SemiCompRisks")
 
@@ -218,6 +274,9 @@ Y = data.frame(dat_ID$R, dat_ID$delta_R,
 lin.pred = list(formula(~ x_c),
                 formula(~ x_c),
                 formula(~ x_c))
+
+
+# Start lightly adapted code from SemiCompRisks documentation -------------------
 
 ### Hyperparameters
 ## Subject-specific frailty variance component
@@ -242,9 +301,11 @@ hyperParams <- list(theta = theta.ab,
 ###################
 
 ## Setting for the overall run
-numReps    <- 5000
+# Get 2000 total post-burnin reps after combining 4 chains
+# 500 samples per chain -> 5000 samples pre-thinning -> 10000 samples/chain
+numReps    <- 10000
 thin       <- 10
-burninPerc <- 0.6
+burninPerc <- 0.5
 
 ## Settings for storage
 nGam_save <- 0
@@ -261,8 +322,10 @@ mcmc.WB  <- list(run = list(numReps = numReps, thin = thin, burninPerc = burninP
                  tuning = list(mhProp_theta_var = mhProp_theta_var,
                                mhProp_Vg_var = mhProp_Vg_var, 
                                mhProp_alphag_var = mhProp_alphag_var))
+
+## Chain seed starting values
 myModel <- c("semi-Markov", "Weibull")
-startValues      <- vector("list", 2)
+startValues      <- vector("list", 4)
 startValues[[1]] <- initiate.startValues_HReg(Y, lin.pred, dat_ID, model = myModel)
 startValues[[2]] <- initiate.startValues_HReg(Y, lin.pred, dat_ID, model = myModel,
                                               theta = 0.23)
@@ -271,30 +334,85 @@ startValues[[3]] <- initiate.startValues_HReg(Y, lin.pred, dat_ID, model = myMod
 startValues[[4]] <- initiate.startValues_HReg(Y, lin.pred, dat_ID, model = myModel,
                                               theta = 0.55)
 
-# Fit SemiCompRisks models
-fit2 <- BayesID_HReg(Y, lin.pred, data = dat_ID,
-                     hyperParams = hyperParams, startValues = startValues,
-                     mcmc = mcmc.WB, path = "SemiCompRisks/Output/")
-print(fit2)
-str(summary(fit2))
-theta_est <- summary(fit2)[["theta"]][,1]
-kappa_ests <- exp(summary(fit2)[["h0"]][1, c(1,4,7)])
-beta0_ests <- summary(fit2)[["h0"]][1, c(1,4,7)]
-alpha_ests <- exp(summary(fit2)[["h0"]][2, c(1,4,7)])
-beta_ests <- log(summary(fit2)[["coef"]][c(1,4,7)])
-
-# print(fit2)
-# str(summary(fit2)$psrf)
-# plot(fit2)
-# str(fit2)
-# 
-# # Extract comparable to Stan output
-# beta01 <- log(summary(fit2)[["psrf"]][["h0"]]["kappa","h1"])
-# beta02 <- log(summary(fit2)[["psrf"]][["h0"]]["kappa","h2"])
-# beta03 <- log(summary(fit2)[["psrf"]][["h0"]]["kappa","h3"])
-# beta_x <- summary(fit2)[["psrf"]][["coef"]]
+# End lightly adapted code from SemiCompRisks documentation ---------------------
 
 ```
 
-TODO(LCOMM): Finish comparison table
+We use the `SemiCompRisks` package to fit the illness-death model. The model fit by `BayesID_HReg()` is not completely comparable to the Stan code above because it includes an individual-level $\gamma$ frailty that induces additional correlation between $R_i$ and $T_i$. (However, the Stan code could be changed to include a frailty parameter.)
+
+The models fit by `SemiCompRisks` are as follows:
+
+Non-terminal event hazard at time $r$:
+\[ h_{1}(r | \gamma_i, X_i) 
+= \gamma_i \alpha_1 \kappa_1 r^{\alpha_1 - 1} \mathrm{exp} \left\lbrace \beta_1 X_i \right\rbrace 
+= \gamma_i \alpha_1 r^{\alpha_1 - 1} \mathrm{exp} \left\lbrace \beta_0 + \beta_1 X_i \right\rbrace 
+\text{ for } r > 0 \]
+
+Terminal event hazard at time $t$, without having experienced the non-terminal event:
+\[ h_{2}(t | \gamma_i, X_i) 
+= \gamma_i \alpha_2 \kappa_2 t^{\alpha_2 - 1} \mathrm{exp} \left\lbrace \beta_2 X_i \right\rbrace 
+= \gamma_i \alpha_2 t^{\alpha_2 - 1} \mathrm{exp} \left\lbrace \beta_{02} + \beta_2 X_i \right\rbrace 
+\text{ for } t > 0 \]
+
+Terminal event hazard at time $t$, after having experienced the non-terminal event at $r$ in a Semi-Markov model:
+\[ h_{3}(t | \gamma_i, X_i) 
+= \gamma_i \alpha_3 \kappa_3 (t-r)^{\alpha_3 - 1} \mathrm{exp} \left\lbrace \beta_3 X_i \right\rbrace 
+= \gamma_i \alpha_3 (t-r)^{\alpha_3 - 1} \mathrm{exp} \left\lbrace \beta_{03} + \beta_3 X_i \right\rbrace 
+\text{ for } t > r \]
+
+The $\gamma_i$ are assumed to be i.i.d. from a $\Gamma(\theta^{-1}, \theta^{-1})$ distribution, which has a mean of 1. The models assumed by the Stan code can be seen as a special case where $\gamma_i = 1 \ \forall \ i$.
+
+```{r}
+# Fit SemiCompRisks models
+k_start <- Sys.time()
+fit2 <- BayesID_HReg(Y, lin.pred, data = dat_ID,
+                     hyperParams = hyperParams, startValues = startValues,
+                     mcmc = mcmc.WB, path = "SemiCompRisks/Output/")
+k_elapsed <- Sys.time() - k_start
+```
+
+The Stan model took `r round(s_elapsed, 2)` seconds and the `SemiCompRisks` model took `r round(k_elapsed, 2)` seconds to run. Although the models are not exactly comparable, we can compare our estimates from these two fits, especially for $(\beta_1, \beta_2, \beta_3)$.
+
+TODO(LCOMM): Check on these times (expes)
+TODO(LCOMM): Get effective sample size/PSRF numbers to compare 2 approaches.
+
+```{r}
+# Comparing estimates from SemiCompRisks and Stan models
+
+# SemiCompRisks posterior means? medians? can't tell 
+# TODO(LCOMM): Find this out
+k_theta_est <- summary(fit2)[["theta"]][,1]
+k_kappa_ests <- exp(summary(fit2)[["h0"]][1, c(1,4,7)])
+k_beta0_ests <- summary(fit2)[["h0"]][1, c(1,4,7)]
+k_alpha_ests <- exp(summary(fit2)[["h0"]][2, c(1,4,7)])
+k_beta1_ests <- log(summary(fit2)[["coef"]][c(1,4,7)])
+semicomp_param_ests <- c(k_theta_est, k_beta0_ests, k_beta1_ests, k_alpha_ests)
+
+# Stan posterior means
+s_pmeans <- summary(fit1)[["summary"]][,"mean"]
+s_beta0_ests <- s_pmeans[c("beta1[1]", "beta2[1]", "beta3[1]")]
+s_beta1_ests <- s_pmeans[c("beta1[2]", "beta2[2]", "beta3[2]")]
+s_alpha_ests <- s_pmeans[c("alpha1", "alpha2", "alpha3")]
+names(s_beta0_ests) <- c("$\\beta_{01}$", "$\\beta_{02}$", "$\\beta_{03}$")
+names(s_beta1_ests) <- c("$\\beta_{1}$", "$\\beta_{2}$", "$\\beta_{3}$")
+names(s_alpha_ests) <- c("$\\alpha_{1}$", "$\\alpha_{2}$", "$\\alpha_{3}$")
+stan_param_ests <- c(s_beta0_ests, s_beta1_ests, s_alpha_ests)
+
+# Combine into a table
+library("knitr")
+semi_res_tab <- data.frame(Parameter = c("$\\theta$", names(stan_param_ests)),
+                           stan = c(NA, stan_param_ests),
+                           semicomp = semicomp_param_ests)
+options(knitr.kable.NA = "--")
+kable(semi_res_tab, escape = FALSE, row.names = FALSE, align = "crr",
+      col.names = c("Parameter", "Estimate from Stan", "Estimate from SemiCompRisks"),
+      caption = "Illness-death parameter estimates", digits = 4)
+```
+
+
+TODO(LCOMM): Make posterior density plot comparison (maybe?)
+
+TODO(LCOMM): Some kind of convergence comparison -> PSRF?
+
+TODO(LCOMM): Implement Stan model with frailty
 
