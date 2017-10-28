@@ -6,13 +6,146 @@ output:
   pdf_document: default
 header-includes:
   - \usepackage{tikz}
+  - \usepackage{xcolor}
+  - \usepackage{pgfplots}
   - \usetikzlibrary{positioning}
   - \usetikzlibrary{arrows}
 ---
 
+\definecolor{hcolor}{RGB}{179,226,205}
+\definecolor{icolor}{RGB}{255,242,174}
+\definecolor{dcolor}{RGB}{253,205,172}
+\definecolor{rcolor}{RGB}{51,160,44}
+\definecolor{tcolor}{RGB}{31,120,180}
+\definecolor{dscolor}{RGB}{27,158,119}
+\definecolor{cscolor}{RGB}{217,95,2}
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+# Illness-death models
+
+## Introduction
+The compartmental model representation of the issue of semicompeting risks conceptualizes an observational unit as belonging to exactly one state at any given time point. These models apply to contexts outside of illness and death, but it is illustrative to think of a person who may be "healthy," "ill," or "dead." Developing illness is a non-terminal event and dying is the terminal event. When illness occurs, it _must_ occur prior to death. However, some subjects may die without ever experiencing the illness of interest.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[ ->,shorten >=2pt,>=stealth, node distance=2cm, pil/.style={->,thick,shorten =2pt,}, box/.style = {fill=#1,
+                 draw, solid, thin, minimum size=9mm}]
+	\node[box = hcolor] (h) {\textbf{Healthy}};
+	\node[box = icolor, above right=of h] (i) {\textbf{Ill}};
+	\node[box = dcolor, below right=of i] (d) {\textbf{Dead}};
+	\path[->] (h) edge node[below]{$\lambda_2$} (d);
+    \path[->] (h) edge node[above]{$\lambda_1 \ \ $} (i);
+    \path[->] (i) edge node[above]{$\ \ \lambda_3$} (d);
+\end{tikzpicture}
+\caption{A compartmental model representation of an illness-death model in semicompeting risks}
+\label{fig:compart}
+\end{figure}
+
+## Notation
+
+Suppose we have a non-terminal event $R$ and a terminal event $T$. Both are subject to a censoring time which may vary by person. Let $T_i$ denote the terminal event time for person $i$. When the non-terminal event occurs, $R_i \in \mathbb{R}_+$; when the non-terminal event is truncated by death, $R_i \equiv \bar{\mathbb{R}}$, a non-real number. The potential censoring time is $C_i$. The observed non-terminal event time is $Y^R_i = \min(R_i, T_i, C_i)$, with $\min(x, \bar{\mathbb{R}}) \equiv x$ for any $x \in \mathbb{R}$. The non-terminal event indicator $\delta^R_i$ is $\mathbf{1}(Y^R_i = R_i)$. Similarly, $Y^T_i = \min(T_i, C_i)$, and $\delta^R_i$ is $\mathbf{1}(Y^T_i = T_i)$.
+
+## Potential observed data patterns
+
+Four distinct data patterns are possible:
+
+| Type | Description                                            | $(Y^R_i, Y^T_i)$ | $(\delta^R_i, \delta^T_i)$ |
+|:----:|--------------------------------------------------------|:----------------:|:--------------------------:|
+| 1    | Observe neither non-terminal nor terminal event        | $(c_i, c_i)$     | $(0,0)$                    |
+| 2    | Observe non-terminal event; terminal event is censored | $(y^R_i, c_i)$   | $(1,0)$                    |
+| 3    | Observe terminal event without non-terminal event      | $(y^T_i, y^T_i)$ | $(0,1)$                    |
+| 4    | Observe non-terminal and terminal events               | $(y^R_i, y^T_i)$ | $(1,1)$                    |
+
+
+# Likelihood contributions by observed data pattern
+
+The joint density for $T$ and $R$ is shown in \ref{fig:jointdens}. The portion where both event types are observed is only defined on the "upper wedge" where $T>R$; the joint density is $f_u(r,t)$. When the non-terminal event does not occur ($R = \bar{\mathrm{R}}$), the density of $T$ is give $f_{\bar{\mathrm{R}}}(t)$.
+
+\begin{figure}
+\begin{center}
+\begin{tikzpicture}
+\pgfplotsset{ticks=none}
+\begin{axis}[title = {$f_u(r,t)$},
+scale only axis = true, enlargelimits = true,
+width = 0.3\linewidth, height = 0.3\linewidth,
+axis lines = left, xlabel = {Non-terminal event time $R$}, 
+x label style = {at = {(axis description cs:0.5,-0.05)}, anchor = north},
+ylabel = {Terminal event time $T$}]
+\addplot[domain=0:1, samples=3, color=black] {x};
+\addplot[fill = lightgray, draw = none, fill opacity = 0.25] coordinates {(0,0) (1,1) (0,1)};
+\node at (axis cs:0.25, 0.65) {$T>R$};
+\end{axis}
+\end{tikzpicture}
+\begin{tikzpicture}
+\pgfplotsset{ticks=none}
+\begin{axis}[title = {$f_{\bar{\mathbb{R}}}(t)$},
+scale only axis = true, enlargelimits = true, 
+width = 0.1\linewidth, height = 0.3\linewidth,
+axis lines = left, xlabel = {$R = \bar{\mathbb{R}}$}, ylabel = {},
+x axis line style = {draw = none}, 
+x label style = {at = {(axis description cs:0,-0.05)}, anchor = north}]
+\addplot[domain=0:2.2, samples=100, color=black] (1.5 * x^0.5 * exp(-x^1.5), x);
+\end{axis}
+\end{tikzpicture}
+\end{center}
+\label{fig:jointdens}
+\end{figure}
+
+For now, we assume a semi-Markov model for $\lambda_3$ where the hazard of the terminal event only depends on covariates and time elapsed since the non-terminal event. Ignoring measure theoretic issues and using $P(X=x)$ to refer to the pdf $f(x)$ for any continuous random variable,
+\begin{align*} 
+f_u(r,t) & = P(R = r, T = t) \text{ for } t > r \\
+& = P(R = r, T > r) P (T = t | R = r, T > r) \\
+& = 
+\underbrace{\frac{P(R = r, T > r)}{\textcolor{dscolor}{P(R > r, T > r)}}}_{\lambda_1(r)}
+\underbrace{\textcolor{dscolor}{P(R > r, T > r)}}_{S_1(r) S_2(r)}
+\underbrace{\frac{P(T = t | R = r, T > r)}{\textcolor{cscolor}{P(T > t | R = r)}}}_{\lambda_3(t-r)}
+\underbrace{\textcolor{cscolor}{P(T > t | R = r)}}_{S_3(t-r)} \\
+& = \lambda_1(r) \lambda_3(t-r) \exp\left\lbrace - \Lambda_1(r) - \Lambda_3(t-r) \right\rbrace
+\end{align*}
+
+In a Markov model for death following the non-terminal event, $\lambda_3(t-r)$, $\Lambda_3(t-r)$, and $S_3(t-r)$ above would be replaced by $\lambda_3(t)$, $\Lambda_3(t)$, and $S_3(t)$.
+
+The density for terminal event times among those who never experience the non-terminal event is
+\begin{align*}
+f_{\bar{\mathbb{R}}} & = P(T = t, R = \bar{\mathbb{R}}) \\
+& = 
+\underbrace{\frac{P(R > t, T = t)}{\textcolor{dscolor}{P(R > r, T > r)}}}_{\lambda_2(t)}
+\underbrace{\textcolor{dscolor}{P(R > r, T > r)}}_{S_1(t)S_2(t)} \\
+& = \lambda_2(t) \exp \left\lbrace -\Lambda_1(t) + \Lambda_2(t) \right\rbrace
+\end{align*}
+
+## Likelihood contributions by data pattern
+
+For the semi-Markov model, the general form of the likelihood contributions is
+
+\[ (\textcolor{rcolor}{\text{non-terminal contribution}}) \times 
+(\textcolor{tcolor}{\text{terminal contribution}}) \]
+
+TODO(LCOMM): add colors to contributions below
+
+Type 1 (observe neither event type):
+\[ L_{1i} = P(R > c_i, T > c_i) = S_1(c_i)S_2(c_i) = S_1(y^R_i) S_2(y^T_i) 
+\]
+
+Type 2 (observe only non-terminal event):
+\[ L_{2i} = P(R = y^R_i, T > c_i) = \int_{c_i}^\infty f_u(y^R_i, u) du
+= f_1(y^R_i) S_2(y^R_i) S_3(c_i - y^R_i)
+\]
+
+Type 3 (observe only terminal event):
+\[ L_{3i} = P(R > y^T_i, T = y^T_i) = \int_{y^T_i}^\infty f_u(u, y^R_i) du 
+= f_2(y^T_i) S_1(y^T_i) 
+\]
+
+Type 4 (observe both event types):
+\[ L_{4i} = P(R = y^R_i, T = y^T_i) = f_u(y^R_i, y^T_i)
+= f_1(y^R_i) S_2(y^R_i) f_3(y^T_i - y^R_i) 
+\]
+
+TODO(LCOMM): fill in notation gaps above
 
 
 # Model formulation
@@ -20,30 +153,18 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Weibull models
 
 The hazard of a Weibull regression model with shape $\alpha$ is
-\[ h(t|x_i) = \alpha t^{\alpha-1} \exp\left\lbrace x_i'\beta \right\rbrace\]
+\[ h(t|x_i) = \alpha t^{\alpha-1} \exp\left\lbrace \beta_0 + x_i'\beta \right\rbrace\]
 With $\kappa = \exp(\beta_0)$, this is the parameterization used in Lee et al.
 
 Alternatively, one can use the Stan hazard parameterization, where
-\[ h(t) = \frac{\alpha}{\sigma} \left( \frac{t}{\sigma} \right)^{\alpha - 1}\]
+\[ h(t) = \frac{\alpha}{\sigma} \left( \frac{t}{\sigma} \right)^{\alpha - 1} \]
 
 To incorporate regression parameters into the model, we note that
 \[ \sigma^{-\alpha} = \exp\left\lbrace x_i'\beta \right\rbrace \]
 and thus
-\[ \sigma = \exp\left\lbrace -\frac{x_i'\beta}{\alpha} \right\rbrace\]
+\[ \sigma = \exp\left\lbrace -\frac{x_i'\beta}{\alpha} \right\rbrace \]
 
-# Likelihood contributions by observed data pattern
-
-
-TODO(LCOMM): Type out likelihood
-
-
-## Observed
-
-
-TODO(LCOMM): Observed data pattern table
-
-TODO(LCOMM): Likelihood contributions by data pattern
-
+# Fitting semicompeting risk Weibull hazard models in Stan
 
 ```{r}
 # Packages
